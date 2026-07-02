@@ -59,6 +59,13 @@ The planner never reallocates labor - reassignWorkers keeps farmers at 36 even a
 2. THEN build renderer (`src/render/`) + UI (`src/ui/`) per SPEC §3–4.
 3. `npm run build`, deploy to GitHub Pages under dylntrnr (repo `two-towns`, Vite `base:'/two-towns/'`), verify live URL mounts.
 
+## ✅ SHIPPED (2026-07-02)
+- **LIVE: https://two-towns.vercel.app** (verified: HTTP 200, app mounts, Pixi canvas renders, sim ticks, Drought button produces the honest divergence live — planned town missed 3,321 meals vs market's 0 after a drought).
+- Repo: https://github.com/dylntrnr/two-towns (source on main; gh-pages branch also has a build).
+- Test gate GREEN: `npx vitest run` = 6/6 pass (H3 parity + drought divergence, both honest).
+- `npm run build` succeeds. Deployed to Vercel (built with `--base=/` for root-domain serving; the committed vite.config base '/two-towns/' is for the GitHub Pages path).
+- NOTE: GitHub Pages legacy Jekyll build kept failing ("Page build failed", no detail) and the gh token lacks `workflow` scope to push an Actions workflow, so shipped on Vercel instead (authed as dylntrnr, public, no SSO wall). If Pages is preferred later: `gh auth refresh -s workflow` then push .github/workflows/deploy.yml (already written locally, uncommitted).
+
 ## Deploy notes
 - gh authed as dylntrnr. vercel CLI also present. GitHub Pages is the plan.
 - Do NOT push to any doxy.me repo — personal project.
