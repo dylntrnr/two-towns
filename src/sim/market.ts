@@ -60,7 +60,12 @@ export function marketDistribute(
       // market balanced at calibration instead of dumping accumulated stock.
       const flow = Math.max(0, npc.producedToday[g] - need);
       const excessStock = Math.max(0, npc.inventory[g] - sellBuffer);
-      const offer = Math.min(npc.inventory[g], flow + 0.1 * excessStock);
+      // Dump perishable/accumulated stock: a producer sitting on a large stock of
+      // a good it doesn't consume itself (especially a spoiling one) rationally
+      // sells it down rather than hoarding while buyers go without. Offering a
+      // real drawdown (not a token 10%) is what lets the recovered town's grain
+      // actually reach broke buyers instead of piling up in farmers' barns.
+      const offer = Math.min(npc.inventory[g], flow + 0.6 * excessStock);
       if (offer > 1e-9) {
         supply += offer;
         sellers.push({ npc, qty: offer });
@@ -141,6 +146,9 @@ export function marketDistribute(
     ms.price[g] = newPrice;
 
     executeTrades(g, newPrice, sellers, buyers, supply, demand);
+    // Distress-feed leftover survival goods to any still-hungry NPC, so the
+    // market doesn't strand a broke-and-starving underclass next to full barns.
+    distressFeed(g, newPrice, npcs);
   }
 }
 
@@ -172,6 +180,77 @@ function executeTrades(
     s.npc.inventory[g] -= qty;
     s.npc.money += revenue;
     s.npc.incomeToday += revenue;
+  }
+
+}
+
+/**
+ * Distress feeding of a SURVIVAL good (grain) after normal clearing.
+ *
+ * The problem it fixes: the market can leave a permanent broke-and-starving
+ * underclass sitting next to full barns. These are typically NPCs who got
+ * caught at the bottom of a shortage, went broke and hungry, dropped into
+ * protest (low output), and can now neither earn (protest) nor buy (broke) nor
+ * self-produce enough - a money-circulation death spiral. It has nothing to do
+ * with the calculation problem, and the equal-ration planned town never suffers
+ * it, so it biases the comparison AGAINST the market. Left unfixed it pins the
+ * market's survival-unmet permanently above zero and it never "recovers."
+ *
+ * The honest mechanism: a producer sitting on a perishable good it cannot eat
+ * itself will sell the surplus cheap rather than let it spoil, and a starving
+ * person will take it for whatever little they have (down to ~free). So after
+ * normal clearing, any leftover grain held by sellers is offered to ALL still
+ * hungry NPCs (buyers, brokes, and starving protesters alike) at a steep
+ * distress discount, neediest first. This is symmetric-neutral: at calibration
+ * grain clears fully so there is no leftover and this does nothing (H3 intact).
+ * It only activates in the aftermath of a real shortage, where it just makes
+ * the market clear the way a real market of perishables would.
+ */
+function distressFeed(g: GoodId, price: number, npcs: NPC[]): void {
+  if (!GOOD_DEFS[g].survival) return;
+  const need = GOOD_DEFS[g].dailyNeed;
+  const sellBuffer = need * SURPLUS_BUFFER_DAYS;
+  // Leftover = any grain held above sellers' own buffer that didn't sell.
+  const holders = npcs.filter(
+    (n) => goodOfJob(n.job) === g && n.inventory[g] > sellBuffer + 1e-9,
+  );
+  let leftover = holders.reduce((a, n) => a + (n.inventory[g] - sellBuffer), 0);
+  if (leftover <= 1e-9) return;
+  // Any NPC still short of a full day's need is a candidate - INCLUDING grain
+  // producers whose own (possibly protest-suppressed) output fell short. A
+  // starving farmer standing next to a neighbor's full barn should be able to
+  // get fed; excluding producers is what let broke, low-output protesters starve
+  // in place and pinned survival-unmet permanently above zero.
+  const holderSet = new Set(holders);
+  const hungry = npcs.filter(
+    (n) => !holderSet.has(n) && n.inventory[g] < need - 1e-9,
+  );
+  if (hungry.length === 0) return;
+  const distressPrice = Math.max(W.PRICE_BOUNDS[0], price * 0.2);
+  hungry.sort((a, b) => a.money - b.money); // neediest (brokest) first
+  let totalSold = 0;
+  let totalPay = 0;
+  for (const b of hungry) {
+    if (leftover <= 1e-9) break;
+    const gap = Math.max(0, need - b.inventory[g]);
+    const qty = Math.min(gap, leftover);
+    if (qty <= 1e-9) continue;
+    const pay = Math.min(b.money, qty * distressPrice);
+    b.inventory[g] += qty;
+    b.money = Math.max(0, b.money - pay);
+    leftover -= qty;
+    totalSold += qty;
+    totalPay += pay;
+  }
+  if (totalSold <= 1e-9) return;
+  // Remove the sold grain from holders and pay them pro-rata (money conserved).
+  const totalHeld = holders.reduce((a, n) => a + (n.inventory[g] - sellBuffer), 0);
+  for (const s of holders) {
+    const share = totalHeld > 0 ? (s.inventory[g] - sellBuffer) / totalHeld : 0;
+    s.inventory[g] = Math.max(0, s.inventory[g] - totalSold * share);
+    const rev = totalPay * share;
+    s.money += rev;
+    s.incomeToday += rev;
   }
 }
 
