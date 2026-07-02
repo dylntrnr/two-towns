@@ -15,5 +15,24 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": [
+    "src/test/dbg.ts",
+    "src/test/diag.ts",
+    "src/test/droughttrace.ts",
+    "src/test/ematrace.ts",
+    "src/test/eqm.ts",
+    "src/test/labortrace.ts",
+    "src/test/plannertrace.ts",
+    "src/test/probe.ts",
+    "src/test/sweep.ts",
+    "src/test/trace.ts",
+    "src/test/trace2.ts",
+    "src/test/unmetsplit.ts",
+    "src/test/rectrace.ts",
+    "src/test/oretrace.ts",
+    "src/test/broketrace.ts",
+    "src/test/verify.ts",
+    "src/test/calibcheck.ts"
+  ]
 }
